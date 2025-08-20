@@ -4,9 +4,9 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
-  <ItemGroup>
-    <PackageReference Include="Microsoft.Graph" Version="5.58.0" />
-    <PackageReference Include="Microsoft.Identity.Client" Version="4.63.0" />
-    <PackageReference Include="Azure.AI.Speech" Version="1.38.0" />
-  </ItemGroup>
+<ItemGroup>
+  <PackageReference Include="Microsoft.Graph" Version="5.58.0" />
+  <PackageReference Include="Microsoft.Identity.Client" Version="4.63.0" />
+  <PackageReference Include="Microsoft.CognitiveServices.Speech" Version="1.37.0" />
+</ItemGroup>
 </Project>
