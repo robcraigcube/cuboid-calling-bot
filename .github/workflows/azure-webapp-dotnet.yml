@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 env:
-  AZURE_WEBAPP_NAME: cuboid-calling-bot-rwc   # your Web App name
+  AZURE_WEBAPP_NAME: cuboid-calling-bot-rwc
   DOTNET_VERSION: '8.0.x'
 
 jobs:
@@ -22,16 +22,13 @@ jobs:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
       - name: Restore
-        working-directory: Cuboid.CallingBot
-        run: dotnet restore
+        run: dotnet restore Cuboid.CallingBot.csproj
 
       - name: Build
-        working-directory: Cuboid.CallingBot
-        run: dotnet build --configuration Release
+        run: dotnet build Cuboid.CallingBot.csproj --configuration Release --no-restore
 
       - name: Publish
-        working-directory: Cuboid.CallingBot
-        run: dotnet publish -c Release -o ${{ github.workspace }}/publish
+        run: dotnet publish Cuboid.CallingBot.csproj -c Release -o ${{ github.workspace }}/publish --no-build
 
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
