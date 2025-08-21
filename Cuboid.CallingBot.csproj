@@ -7,11 +7,12 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Keep ONLY Graph v5; remove old Communications.* prereleases -->
+    <!-- Keep ONLY the stable Graph SDK and other runtime deps -->
     <PackageReference Include="Microsoft.Graph" Version="5.40.0" />
-    <PackageReference Include="Azure.Identity" Version="1.11.0" />
+    <PackageReference Include="Azure.Identity" Version="1.10.4" />
     <PackageReference Include="Microsoft.CognitiveServices.Speech" Version="1.35.0" />
-    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.10" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.0" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.5.0" />
   </ItemGroup>
 </Project>
+
