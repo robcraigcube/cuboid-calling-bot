@@ -1,36 +1,26 @@
 using Azure.Identity;
 using Microsoft.CognitiveServices.Speech;
-using Microsoft.Graph;
 using Cuboid.CallingBot.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services
+// Controllers & Swagger
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// Graph client (client credentials)
-builder.Services.AddSingleton<GraphServiceClient>(_ =>
-{
-    var credential = new ClientSecretCredential(
-        Environment.GetEnvironmentVariable("MS_TENANT_ID"),
-        Environment.GetEnvironmentVariable("MS_APP_ID"),
-        Environment.GetEnvironmentVariable("MS_APP_SECRET")
-    );
+// HttpClient for Graph calling
+builder.Services.AddHttpClient<GraphCallingClient>();
 
-    return new GraphServiceClient(credential);
-});
-
-// Azure Speech
+// Speech
 builder.Services.AddSingleton<SpeechConfig>(_ =>
 {
-    var cfg = SpeechConfig.FromSubscription(
-        Environment.GetEnvironmentVariable("SPEECH_KEY"),
-        Environment.GetEnvironmentVariable("SPEECH_REGION")
-    );
+    var key = Environment.GetEnvironmentVariable("SPEECH_KEY") ?? "";
+    var region = Environment.GetEnvironmentVariable("SPEECH_REGION") ?? "";
+    var cfg = SpeechConfig.FromSubscription(key, region);
     cfg.SpeechRecognitionLanguage = "en-GB";
-    cfg.SpeechSynthesisVoiceName = Environment.GetEnvironmentVariable("TTS_VOICE") ?? "en-GB-LibbyNeural";
+    cfg.SpeechSynthesisVoiceName =
+        Environment.GetEnvironmentVariable("TTS_VOICE") ?? "en-GB-LibbyNeural";
     return cfg;
 });
 
@@ -49,10 +39,9 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-app.UseAuthorization();
 app.MapControllers();
 
-// health
+// Health
 app.MapGet("/healthz", () => "ok");
 
 app.Run();
