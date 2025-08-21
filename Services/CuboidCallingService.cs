@@ -1,6 +1,14 @@
+using Microsoft.Extensions.Logging;
 using Microsoft.Graph;
 using Microsoft.Graph.Models;
 using Cuboid.CallingBot.Models;
+
+//
+// IMPORTANT: Graph v5 action namespaces for calls
+//
+using AnswerNS = Microsoft.Graph.Communications.Calls.Item.Answer;
+using RejectNS = Microsoft.Graph.Communications.Calls.Item.Reject;
+using HangupNS = Microsoft.Graph.Communications.Calls.Item.MicrosoftGraphHangup;
 
 namespace Cuboid.CallingBot.Services;
 
@@ -9,7 +17,7 @@ public class CuboidCallingService
     private readonly GraphServiceClient _graphClient;
     private readonly AudioProcessingService _audioService;
     private readonly ILogger<CuboidCallingService> _logger;
-    private readonly Dictionary<string, CallSession> _activeCalls;
+    private readonly Dictionary<string, CallSession> _activeCalls = new();
 
     public CuboidCallingService(
         GraphServiceClient graphClient,
@@ -19,36 +27,39 @@ public class CuboidCallingService
         _graphClient = graphClient;
         _audioService = audioService;
         _logger = logger;
-        _activeCalls = new Dictionary<string, CallSession>();
     }
 
     public async Task ProcessNotificationAsync(CallbackNotification notification)
     {
-        _logger.LogInformation($"Processing notification: {notification.ChangeType} for {notification.ResourceUrl}");
+        _logger.LogInformation("Processing notification: {type} for {url}",
+            notification.ChangeType, notification.ResourceUrl);
 
         try
         {
             var callId = ExtractCallId(notification.ResourceUrl);
-            
-            switch (notification.ChangeType?.ToLower())
+
+            switch (notification.ChangeType?.ToLowerInvariant())
             {
                 case "created":
                     await HandleIncomingCallAsync(callId);
                     break;
+
                 case "updated":
                     await HandleCallUpdateAsync(callId, notification);
                     break;
+
                 case "deleted":
                     await HandleCallEndedAsync(callId);
                     break;
+
                 default:
-                    _logger.LogInformation($"Unhandled notification type: {notification.ChangeType}");
+                    _logger.LogInformation("Unhandled notification type: {type}", notification.ChangeType);
                     break;
             }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, $"Error processing notification for {notification.ResourceUrl}");
+            _logger.LogError(ex, "Error processing notification for {url}", notification.ResourceUrl);
         }
     }
 
@@ -56,10 +67,10 @@ public class CuboidCallingService
     {
         try
         {
-            _logger.LogInformation($"Handling incoming call: {callId}");
+            _logger.LogInformation("Answering incoming call: {callId}", callId);
 
-            // Answer the call with application-hosted media
-            var answerRequest = new AnswerPostRequestBody
+            // Graph v5: action request body for /communications/calls/{id}/answer
+            var answerRequest = new AnswerNS.AnswerPostRequestBody
             {
                 CallbackUri = "https://cuboid-calling-bot-rwc-axdpaqetgqd4aphz.uksouth-01.azurewebsites.net/api/calling",
                 AcceptedModalities = new List<Modality?> { Modality.Audio },
@@ -70,38 +81,40 @@ public class CuboidCallingService
                 }
             };
 
-            await _graphClient.Communications.Calls[callId].Answer.PostAsync(answerRequest);
+            await _graphClient.Communications
+                .Calls[callId]
+                .Answer
+                .PostAsync(answerRequest);
 
-            // Create and track call session
+            // Track session
             var session = new CallSession(callId);
             _activeCalls[callId] = session;
 
-            _logger.LogInformation($"Successfully answered call: {callId}");
+            _logger.LogInformation("Call answered: {callId}", callId);
 
-            // Start audio processing
+            // Start audio and announce
             await _audioService.StartAudioProcessingAsync(session);
-
-            // Wait for call to stabilize before announcing
-            await Task.Delay(2000);
-            
-            // Send join announcement
+            await Task.Delay(2000); // settle
             await SendJoinAnnouncementAsync(callId);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, $"Error answering call {callId}");
-            
-            // Try to reject the call if we can't answer it
+            _logger.LogError(ex, "Error answering call {callId}", callId);
+
+            // Best-effort reject if answer failed
             try
             {
-                await _graphClient.Communications.Calls[callId].Reject.PostAsync(new RejectPostRequestBody 
-                { 
-                    Reason = RejectReason.Busy 
-                });
+                await _graphClient.Communications
+                    .Calls[callId]
+                    .Reject
+                    .PostAsync(new RejectNS.RejectPostRequestBody
+                    {
+                        Reason = RejectReason.Busy
+                    });
             }
             catch (Exception rejectEx)
             {
-                _logger.LogError(rejectEx, $"Failed to reject call {callId} after answer failure");
+                _logger.LogError(rejectEx, "Reject also failed for call {callId}", callId);
             }
         }
     }
@@ -110,26 +123,21 @@ public class CuboidCallingService
     {
         try
         {
-            _logger.LogInformation($"Call updated: {callId}");
-            
+            _logger.LogInformation("Call updated: {callId}", callId);
+
             if (_activeCalls.TryGetValue(callId, out var session))
             {
-                // In full implementation, this would handle:
-                // - Call state changes (connecting, connected, disconnected)
-                // - Participant changes
-                // - Media state updates
-                // - Audio stream events
-                
-                _logger.LogDebug($"Processing call update for session {callId}");
+                // TODO: handle state/media/participants changes when you wire full Graph Calling
+                _logger.LogDebug("Update processed for active session {callId}", callId);
             }
             else
             {
-                _logger.LogWarning($"Received update for unknown call: {callId}");
+                _logger.LogWarning("Update received for unknown call {callId}", callId);
             }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, $"Error handling call update for {callId}");
+            _logger.LogError(ex, "Error handling call update for {callId}", callId);
         }
     }
 
@@ -137,19 +145,17 @@ public class CuboidCallingService
     {
         try
         {
-            _logger.LogInformation($"Call ended: {callId}");
-            
-            if (_activeCalls.TryGetValue(callId, out var session))
+            _logger.LogInformation("Call ended: {callId}", callId);
+
+            if (_activeCalls.Remove(callId, out var session))
             {
                 session.Dispose();
-                _activeCalls.Remove(callId);
-                
-                _logger.LogInformation($"Cleaned up session for call: {callId}");
+                _logger.LogInformation("Session cleaned for {callId}", callId);
             }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, $"Error handling call end for {callId}");
+            _logger.LogError(ex, "Error cleaning up call {callId}", callId);
         }
     }
 
@@ -157,15 +163,15 @@ public class CuboidCallingService
     {
         try
         {
-            var joinMessage = "Hi all — Cuboid here. It's great to be out of the chat and actually use my voice. I'll stay on mute unless you say 'Cuboid'. If you'd like me to leave or go quiet, just say 'Cuboid, mute'.";
-            
-            await _audioService.SynthesizeAndPlayAsync(callId, joinMessage);
-            
-            _logger.LogInformation($"Sent join announcement for call: {callId}");
+            var msg = "Hi all — Cuboid here. It's great to be out of the chat and actually use my voice. " +
+                      "I'll stay on mute unless you say 'Cuboid'. If you'd like me to leave or go quiet, just say 'Cuboid, mute'.";
+
+            await _audioService.SynthesizeAndPlayAsync(callId, msg);
+            _logger.LogInformation("Join announcement sent for {callId}", callId);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, $"Error sending join announcement for call {callId}");
+            _logger.LogError(ex, "Error sending join announcement for {callId}", callId);
         }
     }
 
@@ -173,21 +179,26 @@ public class CuboidCallingService
     {
         try
         {
-            _logger.LogInformation($"Hanging up call: {callId}");
-            
-            await _graphClient.Communications.Calls[callId].Hangup.PostAsync();
-            
-            if (_activeCalls.TryGetValue(callId, out var session))
+            _logger.LogInformation("Hanging up {callId}", callId);
+
+            await _graphClient.Communications
+                .Calls[callId]
+                .MicrosoftGraphHangup
+                .PostAsync(new HangupNS.MicrosoftGraphHangupPostRequestBody
+                {
+                    ClientContext = Guid.NewGuid().ToString()
+                });
+
+            if (_activeCalls.Remove(callId, out var session))
             {
                 session.Dispose();
-                _activeCalls.Remove(callId);
             }
-            
-            _logger.LogInformation($"Successfully hung up call: {callId}");
+
+            _logger.LogInformation("Hung up {callId}", callId);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, $"Error hanging up call {callId}");
+            _logger.LogError(ex, "Error hanging up {callId}", callId);
         }
     }
 
@@ -195,42 +206,26 @@ public class CuboidCallingService
     {
         try
         {
-            // Extract call ID from resource URL like "/communications/calls/{callId}" 
-            // or "/app/calls/{callId}"
+            // e.g. /communications/calls/{id}
             var segments = resourceUrl.Split('/', StringSplitOptions.RemoveEmptyEntries);
-            
             for (int i = 0; i < segments.Length - 1; i++)
             {
                 if (segments[i].Equals("calls", StringComparison.OrdinalIgnoreCase))
-                {
                     return segments[i + 1];
-                }
             }
-            
-            // Fallback: take the last segment
             return segments.LastOrDefault() ?? resourceUrl;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, $"Error extracting call ID from resource URL: {resourceUrl}");
+            _logger.LogError(ex, "Failed to parse call id from {url}", resourceUrl);
             return resourceUrl;
         }
     }
 
-    private string GenerateMediaConfigBlob()
-    {
-        // In full implementation, this would generate the proper media configuration blob
-        // for application-hosted media with Graph Calling
-        return "application-hosted-media-config";
-    }
+    private string GenerateMediaConfigBlob() => "application-hosted-media-config";
 
-    public CallSession? GetCallSession(string callId)
-    {
-        return _activeCalls.TryGetValue(callId, out var session) ? session : null;
-    }
+    public CallSession? GetCallSession(string callId) =>
+        _activeCalls.TryGetValue(callId, out var s) ? s : null;
 
-    public int GetActiveCallCount()
-    {
-        return _activeCalls.Count;
-    }
+    public int GetActiveCallCount() => _activeCalls.Count;
 }
