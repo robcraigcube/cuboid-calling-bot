@@ -3,12 +3,9 @@ using Microsoft.Graph;
 using Microsoft.Graph.Models;
 using Cuboid.CallingBot.Models;
 
-//
-// IMPORTANT: Graph v5 action namespaces for calls
-//
+// Graph v5 action namespaces for calls (Answer/Reject only)
 using AnswerNS = Microsoft.Graph.Communications.Calls.Item.Answer;
 using RejectNS = Microsoft.Graph.Communications.Calls.Item.Reject;
-using HangupNS = Microsoft.Graph.Communications.Calls.Item.MicrosoftGraphHangup;
 
 namespace Cuboid.CallingBot.Services;
 
@@ -69,7 +66,7 @@ public class CuboidCallingService
         {
             _logger.LogInformation("Answering incoming call: {callId}", callId);
 
-            // Graph v5: action request body for /communications/calls/{id}/answer
+            // Graph v5: /communications/calls/{id}/answer
             var answerRequest = new AnswerNS.AnswerPostRequestBody
             {
                 CallbackUri = "https://cuboid-calling-bot-rwc-axdpaqetgqd4aphz.uksouth-01.azurewebsites.net/api/calling",
@@ -179,26 +176,23 @@ public class CuboidCallingService
     {
         try
         {
-            _logger.LogInformation("Hanging up {callId}", callId);
+            _logger.LogInformation("Ending call {callId}", callId);
 
+            // Use DELETE to end the call in Graph v5 SDK
             await _graphClient.Communications
                 .Calls[callId]
-                .MicrosoftGraphHangup
-                .PostAsync(new HangupNS.MicrosoftGraphHangupPostRequestBody
-                {
-                    ClientContext = Guid.NewGuid().ToString()
-                });
+                .DeleteAsync();
 
             if (_activeCalls.Remove(callId, out var session))
             {
                 session.Dispose();
             }
 
-            _logger.LogInformation("Hung up {callId}", callId);
+            _logger.LogInformation("Call {callId} ended", callId);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error hanging up {callId}", callId);
+            _logger.LogError(ex, "Error ending call {callId}", callId);
         }
     }
 
