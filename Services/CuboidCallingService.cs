@@ -73,8 +73,8 @@ public class CuboidCallingService
                 AcceptedModalities = new List<Modality?> { Modality.Audio },
                 MediaConfig = new AppHostedMediaConfig
                 {
-                    Blob = GenerateMediaConfigBlob(),
-                    RemoveFromDefaultAudioGroup = false
+                    // v5 SDK: only Blob is supported here
+                    Blob = GenerateMediaConfigBlob()
                 }
             };
 
@@ -124,7 +124,7 @@ public class CuboidCallingService
 
             if (_activeCalls.TryGetValue(callId, out var session))
             {
-                // TODO: handle state/media/participants changes when you wire full Graph Calling
+                // TODO: handle state/media/participants when full Graph Calling is wired
                 _logger.LogDebug("Update processed for active session {callId}", callId);
             }
             else
@@ -178,7 +178,7 @@ public class CuboidCallingService
         {
             _logger.LogInformation("Ending call {callId}", callId);
 
-            // Use DELETE to end the call in Graph v5 SDK
+            // Graph v5 SDK: use DELETE to end a call
             await _graphClient.Communications
                 .Calls[callId]
                 .DeleteAsync();
@@ -200,7 +200,6 @@ public class CuboidCallingService
     {
         try
         {
-            // e.g. /communications/calls/{id}
             var segments = resourceUrl.Split('/', StringSplitOptions.RemoveEmptyEntries);
             for (int i = 0; i < segments.Length - 1; i++)
             {
