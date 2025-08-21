@@ -1,12 +1,21 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
+
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>cuboid-calling-bot</UserSecretsId>
   </PropertyGroup>
-<ItemGroup>
-  <PackageReference Include="Microsoft.Graph" Version="5.58.0" />
-  <PackageReference Include="Microsoft.Identity.Client" Version="4.63.0" />
-  <PackageReference Include="Microsoft.CognitiveServices.Speech" Version="1.37.0" />
-</ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Graph" Version="5.40.0" />
+    <PackageReference Include="Microsoft.Graph.Communications.Client" Version="1.1.0-prerelease" />
+    <PackageReference Include="Microsoft.Graph.Communications.Calls" Version="1.1.0-prerelease" />
+    <PackageReference Include="Microsoft.Graph.Communications.Calls.Media" Version="1.1.0-prerelease" />
+    <PackageReference Include="Microsoft.CognitiveServices.Speech" Version="1.35.0" />
+    <PackageReference Include="Azure.Identity" Version="1.10.4" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.0" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.5.0" />
+  </ItemGroup>
+
 </Project>
