@@ -7,7 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Keep ONLY the v5 Graph SDK -->
+    <!-- Keep ONLY Graph v5; remove old Communications.* prereleases -->
     <PackageReference Include="Microsoft.Graph" Version="5.40.0" />
     <PackageReference Include="Azure.Identity" Version="1.11.0" />
     <PackageReference Include="Microsoft.CognitiveServices.Speech" Version="1.35.0" />
