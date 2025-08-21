@@ -4,7 +4,7 @@ using Cuboid.CallingBot.Models;
 
 namespace Cuboid.CallingBot.Services;
 
-public class CuboidBrainService
+public class CuboidBrainService : IDisposable
 {
     private readonly HttpClient _httpClient;
     private readonly string _brainUrl;
@@ -13,15 +13,15 @@ public class CuboidBrainService
     public CuboidBrainService(ILogger<CuboidBrainService> logger)
     {
         _httpClient = new HttpClient();
-        _brainUrl = Environment.GetEnvironmentVariable("BRAIN_URL") ?? 
-                   "https://compliance-ai-robert557.replit.app/llm/respond";
+        _brainUrl = Environment.GetEnvironmentVariable("BRAIN_URL")
+                    ?? "https://compliance-ai-robert557.replit.app/llm/respond";
         _logger = logger;
     }
 
     public async Task<BrainResponse> ProcessUtteranceAsync(
-        string meetingId, 
-        string speaker, 
-        string utterance, 
+        string meetingId,
+        string speaker,
+        string utterance,
         string history)
     {
         var request = new BrainRequest
@@ -35,7 +35,8 @@ public class CuboidBrainService
 
         try
         {
-            _logger.LogInformation($"Sending request to brain: {utterance.Substring(0, Math.Min(50, utterance.Length))}...");
+            _logger.LogInformation("Sending request to brain: {preview}...",
+                utterance.Length > 50 ? utterance[..50] : utterance);
 
             var jsonContent = JsonSerializer.Serialize(request);
             var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
@@ -44,9 +45,15 @@ public class CuboidBrainService
             response.EnsureSuccessStatusCode();
 
             var responseContent = await response.Content.ReadAsStringAsync();
-            var brainResponse = JsonSerializer.Deserialize<BrainResponse>(responseContent);
+            var brainResponse = JsonSerializer.Deserialize<BrainResponse>(
+                responseContent,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
-            _logger.LogInformation($"Brain response received: {brainResponse?.Speech?.Substring(0, Math.Min(50, brainResponse.Speech.Length ?? 0))}...");
+            var preview = (brainResponse?.Speech is string s)
+                ? (s.Length > 50 ? s[..50] : s)
+                : string.Empty;
+
+            _logger.LogInformation("Brain response received: {preview}...", preview);
 
             return brainResponse ?? GetFallbackResponse();
         }
@@ -57,18 +64,12 @@ public class CuboidBrainService
         }
     }
 
-    private BrainResponse GetFallbackResponse()
+    private static BrainResponse GetFallbackResponse() => new()
     {
-        return new BrainResponse 
-        { 
-            Speech = "I'm having trouble connecting to my compliance knowledge right now. Could you repeat that in a moment?",
-            Chat = null,
-            Actions = new List<string>()
-        };
-    }
+        Speech = "I'm having trouble connecting to my compliance knowledge right now. Could you repeat that in a moment?",
+        Chat = null,
+        Actions = new List<string>()
+    };
 
-    public void Dispose()
-    {
-        _httpClient?.Dispose();
-    }
+    public void Dispose() => _httpClient.Dispose();
 }
