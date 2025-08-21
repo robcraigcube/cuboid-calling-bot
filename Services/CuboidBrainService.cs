@@ -14,7 +14,7 @@ public class CuboidBrainService : IDisposable
     {
         _httpClient = new HttpClient();
         _brainUrl = Environment.GetEnvironmentVariable("BRAIN_URL")
-                    ?? "https://compliance-ai-robert557.replit.app/llm/respond";
+                   ?? "https://compliance-ai-robert557.replit.app/llm/respond";
         _logger = logger;
     }
 
@@ -35,8 +35,8 @@ public class CuboidBrainService : IDisposable
 
         try
         {
-            _logger.LogInformation("Sending request to brain: {preview}...",
-                utterance.Length > 50 ? utterance[..50] : utterance);
+            _logger.LogInformation("Sending request to brain: {Preview}...",
+                Preview(utterance));
 
             var jsonContent = JsonSerializer.Serialize(request);
             var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
@@ -45,17 +45,13 @@ public class CuboidBrainService : IDisposable
             response.EnsureSuccessStatusCode();
 
             var responseContent = await response.Content.ReadAsStringAsync();
-            var brainResponse = JsonSerializer.Deserialize<BrainResponse>(
-                responseContent,
-                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            var brainResponse = JsonSerializer.Deserialize<BrainResponse>(responseContent)
+                               ?? GetFallbackResponse();
 
-            var preview = (brainResponse?.Speech is string s)
-                ? (s.Length > 50 ? s[..50] : s)
-                : string.Empty;
+            _logger.LogInformation("Brain response received: {Preview}...",
+                Preview(brainResponse.Speech));
 
-            _logger.LogInformation("Brain response received: {preview}...", preview);
-
-            return brainResponse ?? GetFallbackResponse();
+            return brainResponse;
         }
         catch (Exception ex)
         {
@@ -64,9 +60,16 @@ public class CuboidBrainService : IDisposable
         }
     }
 
+    private static string Preview(string? text)
+    {
+        if (string.IsNullOrEmpty(text)) return string.Empty;
+        return text.Length <= 50 ? text : text.Substring(0, 50);
+    }
+
     private static BrainResponse GetFallbackResponse() => new()
     {
-        Speech = "I'm having trouble connecting to my compliance knowledge right now. Could you repeat that in a moment?",
+        Speech = "I'm having trouble connecting to my compliance knowledge right now. " +
+                 "Could you repeat that in a moment?",
         Chat = null,
         Actions = new List<string>()
     };
