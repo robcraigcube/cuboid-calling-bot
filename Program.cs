@@ -1,27 +1,51 @@
-using System.Net.Http.Headers;
-using Microsoft.OpenApi.Models;
+using Azure.Identity;
+using Microsoft.CognitiveServices.Speech;
+using Microsoft.Graph;
+using Cuboid.CallingBot.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Swagger
+// MVC + Swagger
+builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(c =>
+builder.Services.AddSwaggerGen();
+
+// OPTIONAL Graph client (kept for later Calling work; safe if env vars are empty)
+builder.Services.AddSingleton<GraphServiceClient>(_ =>
 {
-    c.SwaggerDoc("v1", new OpenApiInfo { Title = "Cuboid Control API", Version = "v1" });
+    var tenantId = Environment.GetEnvironmentVariable("MS_TENANT_ID");
+    var clientId = Environment.GetEnvironmentVariable("MS_APP_ID");
+    var clientSecret = Environment.GetEnvironmentVariable("MS_APP_SECRET");
+
+    if (string.IsNullOrWhiteSpace(tenantId) ||
+        string.IsNullOrWhiteSpace(clientId) ||
+        string.IsNullOrWhiteSpace(clientSecret))
+    {
+        // Won't be used yet, but returning a client avoids nulls
+        return new GraphServiceClient(new DefaultAzureCredential());
+    }
+
+    var cred = new ClientSecretCredential(tenantId, clientId, clientSecret);
+    return new GraphServiceClient(cred);
 });
 
-// HTTP client to talk to the media worker (we’ll set WORKER_BASE_URL later)
-builder.Services.AddHttpClient("worker", c =>
+// Speech (used by AudioProcessingService)
+builder.Services.AddSingleton<SpeechConfig>(_ =>
 {
-    var baseUrl = builder.Configuration["WORKER_BASE_URL"] ?? Environment.GetEnvironmentVariable("WORKER_BASE_URL") ?? "";
-    if (!string.IsNullOrWhiteSpace(baseUrl) && !baseUrl.EndsWith("/")) baseUrl += "/";
-    c.BaseAddress = string.IsNullOrWhiteSpace(baseUrl) ? null : new Uri(baseUrl);
-    c.Timeout = TimeSpan.FromSeconds(30);
-    c.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-})
-.AddPolicyHandler(Polly.Extensions.Http.HttpPolicyExtensions
-    .HandleTransientHttpError()
-    .WaitAndRetryAsync(3, i => TimeSpan.FromMilliseconds(250 * i)));
+    var key = Environment.GetEnvironmentVariable("SPEECH_KEY") ?? "";
+    var region = Environment.GetEnvironmentVariable("SPEECH_REGION") ?? "";
+    var cfg = SpeechConfig.FromSubscription(key, region);
+    cfg.SpeechRecognitionLanguage = "en-GB";
+    cfg.SpeechSynthesisVoiceName =
+        Environment.GetEnvironmentVariable("TTS_VOICE") ?? "en-GB-LibbyNeural";
+    return cfg;
+});
+
+// App services
+builder.Services.AddSingleton<CuboidCallingService>();
+builder.Services.AddSingleton<AudioProcessingService>();
+builder.Services.AddSingleton<CuboidBrainService>();
+builder.Services.AddSingleton<WakePhraseDetector>();
 
 var app = builder.Build();
 
@@ -31,47 +55,10 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+app.UseHttpsRedirection();
+app.MapControllers();
+
 // Health
-app.MapGet("/healthz", () => Results.Ok("ok"));
-
-// Control endpoints (proxy to the worker)
-app.MapPost("/join", async (JoinRequest req, IHttpClientFactory factory) =>
-{
-    if (string.IsNullOrWhiteSpace(req.JoinUrl))
-        return Results.BadRequest("JoinUrl required");
-
-    var client = factory.CreateClient("worker");
-    if (client.BaseAddress is null)
-        return Results.BadRequest("WORKER_BASE_URL not set on Control API");
-
-    var res = await client.PostAsJsonAsync("api/join", req);
-    var content = await res.Content.ReadAsStringAsync();
-    return Results.StatusCode((int)res.StatusCode, content);
-});
-
-app.MapPost("/leave", async (LeaveRequest req, IHttpClientFactory factory) =>
-{
-    var client = factory.CreateClient("worker");
-    if (client.BaseAddress is null)
-        return Results.BadRequest("WORKER_BASE_URL not set on Control API");
-
-    var res = await client.PostAsJsonAsync("api/leave", req);
-    var content = await res.Content.ReadAsStringAsync();
-    return Results.StatusCode((int)res.StatusCode, content);
-});
-
-app.MapGet("/status", async (IHttpClientFactory factory) =>
-{
-    var client = factory.CreateClient("worker");
-    if (client.BaseAddress is null)
-        return Results.BadRequest("WORKER_BASE_URL not set on Control API");
-
-    var res = await client.GetAsync("api/status");
-    var content = await res.Content.ReadAsStringAsync();
-    return Results.StatusCode((int)res.StatusCode, content);
-});
+app.MapGet("/healthz", () => Results.Text("ok"));
 
 app.Run();
-
-record JoinRequest(string JoinUrl, string? ThreadId = null, string? MeetingId = null);
-record LeaveRequest(string? CallId = null);
