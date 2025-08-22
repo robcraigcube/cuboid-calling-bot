@@ -57,5 +57,3 @@ app.Run();
 // --- DTOs ---
 public record JoinRequest(string MeetingUrl);
 public record SayRequest(string Text);
-
-
