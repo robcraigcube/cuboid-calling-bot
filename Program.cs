@@ -1,19 +1,34 @@
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+
 var builder = WebApplication.CreateBuilder(args);
 
-// Minimal API + Swagger (handy while we iterate)
+// Minimal API + Swagger only
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
-app.UseSwagger();
-app.UseSwaggerUI();
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
 
-// Health endpoint (used by Azure + your checks)
-app.MapGet("/healthz", () => Results.Text("ok"));
+// Simple health checks so Azure/GitHub runner can verify the app is alive
+app.MapGet("/", () => Results.Ok(new { ok = true, service = "Cuboid Control API" }));
+app.MapGet("/healthz", () => Results.Ok("ok"));
 
-// Root ping
-app.MapGet("/", () => Results.Json(new { name = "Cuboid Control API", status = "running" }));
+// A tiny echo endpoint we’ll extend later
+app.MapPost("/api/echo", async (HttpRequest req) =>
+{
+    using var reader = new StreamReader(req.Body);
+    var text = await reader.ReadToEndAsync();
+    return Results.Ok(new { you_said = text });
+});
 
 app.Run();
+
 
