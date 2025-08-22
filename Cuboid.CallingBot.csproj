@@ -7,12 +7,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Swagger (UI + annotations for .WithOpenApi) -->
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
-    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="8.0.8" />
-
-    <!-- Azure Speech SDK (TTS) -->
     <PackageReference Include="Microsoft.CognitiveServices.Speech" Version="1.38.0" />
   </ItemGroup>
 
 </Project>
+
