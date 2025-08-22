@@ -4,13 +4,19 @@
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <InvariantGlobalization>true</InvariantGlobalization>
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Swagger / OpenAPI -->
+    <!-- Azure Speech SDK for TTS -->
+    <PackageReference Include="Microsoft.CognitiveServices.Speech" Version="1.37.0" />
+
+    <!-- Minimal API + Swagger UI -->
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.5.0" />
-    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="8.0.8" />
+
+    <!-- Resilient HTTP to brain -->
+    <PackageReference Include="Polly" Version="8.4.0" />
+    <PackageReference Include="Polly.Extensions.Http" Version="3.0.0" />
   </ItemGroup>
 
 </Project>
-
