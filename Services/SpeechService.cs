@@ -1,45 +1,47 @@
-using System.Net.Http.Headers;
-using System.Text;
+using Microsoft.CognitiveServices.Speech;
+using Microsoft.CognitiveServices.Speech.Audio;
 
 namespace Cuboid.CallingBot.Services;
 
-public class SpeechService
+public sealed class SpeechService
 {
-    private readonly HttpClient _http;
-    private readonly string _speechKey;
-    private readonly string _region;
+    private readonly SpeechConfig _baseConfig;
     private readonly string _defaultVoice;
 
-    public SpeechService(IHttpClientFactory httpFactory, IConfiguration config)
+    public SpeechService(IConfiguration config)
     {
-        _http = httpFactory.CreateClient();
-        _speechKey = config["SPEECH_KEY"] ?? "";
-        _region = config["SPEECH_REGION"] ?? "";
+        var key = config["SPEECH_KEY"] ?? "";
+        var region = config["SPEECH_REGION"] ?? "";
+        if (string.IsNullOrWhiteSpace(key) || string.IsNullOrWhiteSpace(region))
+            throw new InvalidOperationException("SPEECH_KEY and SPEECH_REGION must be set in App Service Configuration.");
+
         _defaultVoice = config["TTS_VOICE"] ?? "en-GB-LibbyNeural";
+
+        _baseConfig = SpeechConfig.FromSubscription(key, region);
+        // MP3 output
+        _baseConfig.SetSpeechSynthesisOutputFormat(
+            SpeechSynthesisOutputFormat.Audio16Khz32KBitRateMonoMp3);
     }
 
-    public async Task<byte[]> SynthesizeAsync(string text, string? voice = null)
+    public async Task<byte[]> SynthesizeAsync(string text, string? voice = null, CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(_speechKey) || string.IsNullOrWhiteSpace(_region))
-            throw new InvalidOperationException("SPEECH_KEY and SPEECH_REGION must be set in App Service configuration.");
+        var cfg = _baseConfig.Clone();
+        cfg.SpeechSynthesisVoiceName = string.IsNullOrWhiteSpace(voice) ? _defaultVoice : voice!;
 
-        var v = string.IsNullOrWhiteSpace(voice) ? _defaultVoice : voice!;
-        var endpoint = $"https://{_region}.tts.speech.microsoft.com/cognitiveservices/v1";
+        using var pull = AudioOutputStream.CreatePullStream();
+        using var audioCfg = AudioConfig.FromStreamOutput(pull);
+        using var synth = new SpeechSynthesizer(cfg, audioCfg);
 
-        // SSML so we can pick voice
-        var ssml = $@"
-<speak version='1.0' xml:lang='en-GB'>
-  <voice name='{v}'>{System.Security.SecurityElement.Escape(text)}</voice>
-</speak>";
+        var result = await synth.SpeakTextAsync(text);
+        if (result.Reason != ResultReason.SynthesizingAudioCompleted)
+            throw new InvalidOperationException($"TTS failed: {result.Reason} {result.ErrorDetails}");
 
-        using var req = new HttpRequestMessage(HttpMethod.Post, endpoint);
-        req.Headers.Add("Ocp-Apim-Subscription-Key", _speechKey);
-        req.Headers.UserAgent.Add(new ProductInfoHeaderValue("CuboidCallingBot", "1.0"));
-        req.Headers.Add("X-Microsoft-OutputFormat", "audio-48khz-192kbitrate-mono-mp3");
-        req.Content = new StringContent(ssml, Encoding.UTF8, "application/ssml+xml");
-
-        using var res = await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead);
-        res.EnsureSuccessStatusCode();
-        return await res.Content.ReadAsByteArrayAsync();
+        using var stream = AudioDataStream.FromResult(result);
+        using var ms = new MemoryStream();
+        var buffer = new byte[4096];
+        uint read;
+        while ((read = stream.ReadData(buffer)) > 0)
+            ms.Write(buffer, 0, (int)read);
+        return ms.ToArray();
     }
 }
