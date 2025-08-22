@@ -6,7 +6,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Swagger UI (needed for AddSwaggerGen / UseSwagger) -->
+    <!-- Swagger/OpenAPI UI -->
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.5.0" />
   </ItemGroup>
 </Project>
